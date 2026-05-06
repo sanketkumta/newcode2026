@@ -20,6 +20,7 @@ from database import init_db, get_db, HoldingDB, AnalysisDB, NotificationDB, Set
 from models import HoldingCreate, HoldingUpdate, SettingsUpdate
 from services.market_data import MarketDataService
 from services.scheduler import AnalysisScheduler
+from services.ai_analysis import AIAnalysisService
 
 logger = logging.getLogger(__name__)
 notification_queue: asyncio.Queue = asyncio.Queue()
@@ -60,6 +61,18 @@ def set_setting(db: Session, key: str, value: str):
     else:
         db.add(SettingDB(key=key, value=value))
     db.commit()
+
+
+def _get_api_key(db: Session, provider: str) -> Optional[str]:
+    key_map = {
+        "anthropic": "anthropic_api_key",
+        "gemini": "gemini_api_key",
+        "groq": "groq_api_key",
+    }
+    db_key = key_map.get(provider)
+    if not db_key:
+        return None
+    return get_setting(db, db_key) or os.getenv(db_key.upper())
 
 
 def add_notification(db: Session, type: str, title: str, message: str):
@@ -194,9 +207,8 @@ async def get_history(symbol: str, period: str = "1y"):
 
 @app.post("/api/analysis/portfolio")
 async def run_portfolio_analysis(db: Session = Depends(get_db)):
-    api_key = get_setting(db, "anthropic_api_key") or os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=400, detail="Anthropic API key not configured. Go to Settings.")
+    provider = get_setting(db, "ai_provider") or "rule_based"
+    api_key = _get_api_key(db, provider)
 
     holdings = db.query(HoldingDB).all()
     if not holdings:
@@ -210,8 +222,7 @@ async def run_portfolio_analysis(db: Session = Depends(get_db)):
     enriched = await market_service.get_portfolio_data(raw)
     indices = await market_service.get_market_indices()
 
-    from services.claude_analysis import ClaudeAnalysisService
-    result = ClaudeAnalysisService(api_key).analyze_portfolio(enriched, indices)
+    result = AIAnalysisService(provider=provider, api_key=api_key).analyze_portfolio(enriched, indices)
 
     analysis = AnalysisDB(type="portfolio", content=result["content"], recommendation=result["recommendation"])
     db.add(analysis)
@@ -236,15 +247,13 @@ async def run_portfolio_analysis(db: Session = Depends(get_db)):
 
 @app.post("/api/analysis/stock/{symbol}")
 async def analyze_stock(symbol: str, db: Session = Depends(get_db)):
-    api_key = get_setting(db, "anthropic_api_key") or os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=400, detail="Anthropic API key not configured.")
+    provider = get_setting(db, "ai_provider") or "rule_based"
+    api_key = _get_api_key(db, provider)
 
     quote = await market_service.get_quote(symbol)
     technical = await market_service.get_technical_indicators(symbol)
 
-    from services.claude_analysis import ClaudeAnalysisService
-    result = ClaudeAnalysisService(api_key).analyze_stock(symbol, quote, technical)
+    result = AIAnalysisService(provider=provider, api_key=api_key).analyze_stock(symbol, quote, technical)
 
     analysis = AnalysisDB(
         type="stock", symbol=symbol.upper(),
@@ -402,6 +411,9 @@ async def get_settings(db: Session = Depends(get_db)):
 @app.post("/api/settings")
 async def update_settings(settings: SettingsUpdate, db: Session = Depends(get_db)):
     mapping = {
+        "ai_provider": settings.ai_provider,
+        "gemini_api_key": settings.gemini_api_key,
+        "groq_api_key": settings.groq_api_key,
         "anthropic_api_key": settings.anthropic_api_key,
         "kite_api_key": settings.kite_api_key,
         "kite_api_secret": settings.kite_api_secret,

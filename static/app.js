@@ -666,9 +666,27 @@ async function markAllRead() {
 }
 
 // ── settings ───────────────────────────────────────────────────────────────
+function selectProvider(provider) {
+  document.getElementById('s-provider').value = provider;
+  document.querySelectorAll('.provider-card').forEach(card => {
+    const isSelected = card.dataset.provider === provider;
+    card.classList.toggle('border-indigo-500', isSelected);
+    card.classList.toggle('bg-indigo-900/20', isSelected);
+    card.classList.toggle('border-slate-700', !isSelected);
+    card.classList.toggle('bg-slate-800/30', !isSelected);
+  });
+  ['gemini', 'groq', 'anthropic'].forEach(p => {
+    document.getElementById(`key-${p}`).classList.toggle('hidden', p !== provider);
+  });
+}
+
 async function saveSettings() {
+  const provider = document.getElementById('s-provider').value;
   const payload = {
-    anthropic_api_key: document.getElementById('s-anthropic-key').value.trim() || null,
+    ai_provider: provider,
+    gemini_api_key: document.getElementById('s-gemini-key')?.value.trim() || null,
+    groq_api_key: document.getElementById('s-groq-key')?.value.trim() || null,
+    anthropic_api_key: document.getElementById('s-anthropic-key')?.value.trim() || null,
     kite_api_key: document.getElementById('s-kite-key').value.trim() || null,
     kite_api_secret: document.getElementById('s-kite-secret').value.trim() || null,
     analysis_interval_hours: parseInt(document.getElementById('s-interval').value) || null,
@@ -677,8 +695,9 @@ async function saveSettings() {
   try {
     await api('/api/settings', { method: 'POST', body: JSON.stringify(payload) });
     showToast('Settings saved', 'success');
-    ['s-anthropic-key', 's-kite-key', 's-kite-secret'].forEach(id => {
-      document.getElementById(id).value = '';
+    ['s-gemini-key', 's-groq-key', 's-anthropic-key', 's-kite-key', 's-kite-secret'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
     });
   } catch (e) {
     showToast(e.message, 'error');

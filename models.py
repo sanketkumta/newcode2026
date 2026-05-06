@@ -17,6 +17,9 @@ class HoldingUpdate(BaseModel):
 
 
 class SettingsUpdate(BaseModel):
+    ai_provider: Optional[str] = None       # rule_based | gemini | groq | anthropic
+    gemini_api_key: Optional[str] = None
+    groq_api_key: Optional[str] = None
     anthropic_api_key: Optional[str] = None
     kite_api_key: Optional[str] = None
     kite_api_secret: Optional[str] = None
