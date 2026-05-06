@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Investment Monitor</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  body { background: #0f1117; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; }
+  .card { background: #1a1d27; border: 1px solid #2d3148; border-radius: 12px; }
+  .glass { background: rgba(26,29,39,0.95); backdrop-filter: blur(10px); }
+  .tab-active { color: #6366f1; border-bottom: 2px solid #6366f1; }
+  .tab { color: #94a3b8; padding: 10px 16px; cursor: pointer; border-bottom: 2px solid transparent; }
+  .tab:hover { color: #e2e8f0; }
+  .badge-buy { background: #064e3b; color: #34d399; }
+  .badge-sell { background: #4c1d1d; color: #f87171; }
+  .badge-hold { background: #1e293b; color: #94a3b8; }
+  .badge-strong_buy { background: #014737; color: #10b981; }
+  .up { color: #34d399; }
+  .down { color: #f87171; }
+  .neutral { color: #94a3b8; }
+  .analysis-content h2 { font-size: 1rem; font-weight: 700; color: #a5b4fc; margin: 1rem 0 0.5rem; }
+  .analysis-content h3 { font-size: 0.9rem; font-weight: 600; color: #c4b5fd; margin: 0.75rem 0 0.25rem; }
+  .analysis-content ul { padding-left: 1.2rem; list-style: disc; color: #cbd5e1; font-size: 0.875rem; line-height: 1.7; }
+  .analysis-content p { color: #cbd5e1; font-size: 0.875rem; line-height: 1.7; margin-bottom: 0.5rem; }
+  .analysis-content strong { color: #e2e8f0; }
+  .spinner { border: 3px solid #2d3148; border-top-color: #6366f1; border-radius: 50%; width: 28px; height: 28px; animation: spin 0.8s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .notif-dot { width: 8px; height: 8px; background: #ef4444; border-radius: 50%; position: absolute; top: -2px; right: -2px; }
+  input, select { background: #0f1117; border: 1px solid #2d3148; color: #e2e8f0; border-radius: 8px; padding: 8px 12px; font-size: 0.875rem; }
+  input:focus, select:focus { outline: none; border-color: #6366f1; }
+  .btn { padding: 8px 16px; border-radius: 8px; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+  .btn-primary { background: #6366f1; color: white; }
+  .btn-primary:hover { background: #4f46e5; }
+  .btn-primary:disabled { background: #3730a3; opacity: 0.6; cursor: not-allowed; }
+  .btn-secondary { background: #1e2235; color: #94a3b8; border: 1px solid #2d3148; }
+  .btn-secondary:hover { background: #2d3148; color: #e2e8f0; }
+  .btn-danger { background: #4c1d1d; color: #f87171; border: 1px solid #7f1d1d; }
+  .btn-danger:hover { background: #7f1d1d; }
+  .btn-green { background: #064e3b; color: #34d399; }
+  .btn-green:hover { background: #065f46; }
+  .platform-kite { background: #1c3a2e; color: #34d399; }
+  .platform-groww { background: #2d1f3d; color: #a78bfa; }
+  .platform-manual { background: #1e293b; color: #64748b; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #0f1117; }
+  ::-webkit-scrollbar-thumb { background: #2d3148; border-radius: 3px; }
+  .modal-backdrop { background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); }
+  .toast { position: fixed; bottom: 24px; right: 24px; z-index: 9999; padding: 12px 20px; border-radius: 10px; font-size: 0.875rem; max-width: 320px; animation: slideIn 0.3s ease; }
+  @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- HEADER -->
+<header class="glass border-b border-slate-700/50 sticky top-0 z-50 px-6 py-3">
+  <div class="max-w-7xl mx-auto flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">IM</div>
+      <span class="font-bold text-base tracking-tight">Investment Monitor</span>
+      <span id="market-status" class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 ml-2">Checking...</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="ist-time" class="text-xs text-slate-500"></span>
+      <button onclick="openNotifPanel()" class="relative btn btn-secondary text-xs">
+        Notifications
+        <span id="notif-badge" class="notif-dot hidden"></span>
+      </button>
+      <button onclick="showTab('settings')" class="btn btn-secondary text-xs">Settings</button>
+    </div>
+  </div>
+</header>
+
+<!-- TABS -->
+<div class="border-b border-slate-700/50 bg-slate-900/50 sticky top-14 z-40">
+  <div class="max-w-7xl mx-auto px-6 flex gap-1">
+    <button class="tab tab-active" id="tab-dashboard" onclick="showTab('dashboard')">Dashboard</button>
+    <button class="tab" id="tab-portfolio" onclick="showTab('portfolio')">Portfolio</button>
+    <button class="tab" id="tab-analysis" onclick="showTab('analysis')">AI Analysis</button>
+    <button class="tab" id="tab-charts" onclick="showTab('charts')">Charts</button>
+    <button class="tab" id="tab-kite" onclick="showTab('kite')">Kite Connect</button>
+    <button class="tab" id="tab-settings" onclick="showTab('settings')">Settings</button>
+  </div>
+</div>
+
+<main class="max-w-7xl mx-auto px-6 py-6">
+
+<!-- ══════════════════════════════════════════════════════════ DASHBOARD -->
+<div id="view-dashboard">
+  <!-- Summary Cards -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="card p-4">
+      <div class="text-xs text-slate-500 mb-1">Total Invested</div>
+      <div id="total-invested" class="text-xl font-bold">—</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs text-slate-500 mb-1">Current Value</div>
+      <div id="total-value" class="text-xl font-bold">—</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs text-slate-500 mb-1">Total P&L</div>
+      <div id="total-pnl" class="text-xl font-bold">—</div>
+      <div id="total-pnl-pct" class="text-xs mt-0.5">—</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs text-slate-500 mb-1">Today's P&L</div>
+      <div id="today-pnl" class="text-xl font-bold">—</div>
+      <div id="today-pnl-pct" class="text-xs mt-0.5">—</div>
+    </div>
+  </div>
+
+  <!-- Market Indices -->
+  <div class="card p-4 mb-6">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm font-semibold text-slate-300">Market Indices</h2>
+      <button onclick="loadIndices()" class="btn btn-secondary text-xs">Refresh</button>
+    </div>
+    <div id="indices-container" class="grid grid-cols-3 gap-4">
+      <div class="text-center text-slate-500 text-sm col-span-3">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Holdings Overview Table -->
+  <div class="card p-4 mb-6">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm font-semibold text-slate-300">Holdings</h2>
+      <div class="flex gap-2">
+        <button onclick="loadPortfolioEnriched()" class="btn btn-secondary text-xs">Refresh Prices</button>
+        <button onclick="showTab('portfolio')" class="btn btn-secondary text-xs">Manage</button>
+      </div>
+    </div>
+    <div id="holdings-table-container">
+      <div class="text-center text-slate-500 text-sm py-8">No holdings. Add stocks in the Portfolio tab.</div>
+    </div>
+  </div>
+
+  <!-- Quick Analysis -->
+  <div class="card p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm font-semibold text-slate-300">Quick Analysis</h2>
+      <div class="flex gap-2 items-center">
+        <input id="quick-symbol" type="text" placeholder="Symbol (e.g. RELIANCE)" class="text-xs w-40" />
+        <button onclick="quickAnalyzeStock()" class="btn btn-secondary text-xs">Analyze Stock</button>
+        <button onclick="runPortfolioAnalysis()" id="btn-portfolio-analysis" class="btn btn-primary text-xs">Analyze Portfolio</button>
+      </div>
+    </div>
+    <div id="quick-analysis-result" class="hidden"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ PORTFOLIO -->
+<div id="view-portfolio" class="hidden">
+  <div class="flex items-center justify-between mb-4">
+    <h1 class="text-base font-semibold">Portfolio Management</h1>
+    <button onclick="openAddHoldingModal()" class="btn btn-primary text-xs">+ Add Holding</button>
+  </div>
+
+  <div class="card overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-slate-700/50 text-xs text-slate-500">
+          <th class="text-left p-3">Symbol</th>
+          <th class="text-right p-3">Qty</th>
+          <th class="text-right p-3">Avg Price</th>
+          <th class="text-right p-3">Platform</th>
+          <th class="text-right p-3">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="portfolio-tbody">
+        <tr><td colspan="5" class="text-center py-8 text-slate-500">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ ANALYSIS -->
+<div id="view-analysis" class="hidden">
+  <div class="flex items-center justify-between mb-4">
+    <h1 class="text-base font-semibold">AI Analysis</h1>
+    <button onclick="runPortfolioAnalysis()" id="btn-analysis-full" class="btn btn-primary text-xs">Run Portfolio Analysis</button>
+  </div>
+
+  <!-- Stock Analysis -->
+  <div class="card p-4 mb-6">
+    <h2 class="text-sm font-semibold text-slate-300 mb-3">Analyze Individual Stock</h2>
+    <div class="flex gap-3">
+      <input id="analysis-symbol" type="text" placeholder="Enter NSE symbol (e.g. TCS, INFY, HDFC)" class="flex-1 text-sm" />
+      <button onclick="analyzeStock()" class="btn btn-primary text-xs">Analyze</button>
+    </div>
+    <div id="stock-analysis-result" class="mt-4 hidden"></div>
+  </div>
+
+  <!-- Analysis History -->
+  <div class="card p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm font-semibold text-slate-300">Analysis History</h2>
+      <button onclick="loadAnalysisHistory()" class="btn btn-secondary text-xs">Refresh</button>
+    </div>
+    <div id="analysis-history"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ CHARTS -->
+<div id="view-charts" class="hidden">
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <div class="card p-4">
+      <h2 class="text-sm font-semibold text-slate-300 mb-4">Portfolio Allocation</h2>
+      <div class="relative h-64">
+        <canvas id="allocation-chart"></canvas>
+      </div>
+    </div>
+    <div class="card p-4">
+      <h2 class="text-sm font-semibold text-slate-300 mb-4">P&L by Stock</h2>
+      <div class="relative h-64">
+        <canvas id="pnl-chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="card p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm font-semibold text-slate-300">Historical Price Chart</h2>
+      <div class="flex gap-2">
+        <input id="chart-symbol" type="text" placeholder="Symbol" class="text-xs w-36" />
+        <select id="chart-period" class="text-xs">
+          <option value="1mo">1 Month</option>
+          <option value="3mo">3 Months</option>
+          <option value="6mo">6 Months</option>
+          <option value="1y" selected>1 Year</option>
+          <option value="2y">2 Years</option>
+        </select>
+        <button onclick="loadPriceChart()" class="btn btn-primary text-xs">Load</button>
+      </div>
+    </div>
+    <div class="relative h-64">
+      <canvas id="price-chart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ KITE -->
+<div id="view-kite" class="hidden">
+  <div class="max-w-lg">
+    <h1 class="text-base font-semibold mb-2">Zerodha Kite Connect</h1>
+    <p class="text-sm text-slate-400 mb-6">Sync your Kite holdings automatically. You need a Kite Connect developer account.</p>
+
+    <div class="card p-5 mb-4">
+      <h2 class="text-sm font-semibold text-slate-300 mb-3">Step 1 — Configure API Keys</h2>
+      <p class="text-xs text-slate-500 mb-3">Enter your Kite API Key and Secret in Settings first.</p>
+      <button onclick="showTab('settings')" class="btn btn-secondary text-xs">Go to Settings</button>
+    </div>
+
+    <div class="card p-5 mb-4">
+      <h2 class="text-sm font-semibold text-slate-300 mb-3">Step 2 — Login to Kite</h2>
+      <button onclick="getKiteLoginUrl()" class="btn btn-green text-xs">Get Kite Login URL</button>
+      <div id="kite-login-url" class="mt-3 hidden"></div>
+    </div>
+
+    <div class="card p-5 mb-4">
+      <h2 class="text-sm font-semibold text-slate-300 mb-3">Step 3 — Enter Request Token</h2>
+      <p class="text-xs text-slate-500 mb-3">After login, Kite redirects to your URL with <code class="bg-slate-800 px-1 rounded">?request_token=xxx</code>. Paste it here.</p>
+      <div class="flex gap-2">
+        <input id="kite-request-token" type="text" placeholder="request_token from URL" class="flex-1 text-xs" />
+        <button onclick="authenticateKite()" class="btn btn-primary text-xs">Authenticate</button>
+      </div>
+    </div>
+
+    <div class="card p-5">
+      <h2 class="text-sm font-semibold text-slate-300 mb-3">Step 4 — Sync Holdings</h2>
+      <button onclick="syncKiteHoldings()" class="btn btn-primary text-xs">Sync Holdings from Kite</button>
+      <div id="kite-sync-result" class="mt-3 text-sm text-slate-400"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ SETTINGS -->
+<div id="view-settings" class="hidden">
+  <div class="max-w-lg">
+    <h1 class="text-base font-semibold mb-6">Settings</h1>
+
+    <div class="card p-5 mb-4">
+      <h2 class="text-sm font-semibold text-slate-300 mb-3">Claude AI (Required)</h2>
+      <label class="text-xs text-slate-400 block mb-1">Anthropic API Key</label>
+      <input id="s-anthropic-key" type="password" placeholder="sk-ant-..." class="w-full mb-3 text-sm" />
+      <p class="text-xs text-slate-500">Get your key from <span class="text-indigo-400">console.anthropic.com</span></p>
+    </div>
+
+    <div class="card p-5 mb-4">
+      <h2 class="text-sm font-semibold text-slate-300 mb-3">Zerodha Kite (Optional)</h2>
+      <label class="text-xs text-slate-400 block mb-1">Kite API Key</label>
+      <input id="s-kite-key" type="password" placeholder="Your Kite API Key" class="w-full mb-3 text-sm" />
+      <label class="text-xs text-slate-400 block mb-1">Kite API Secret</label>
+      <input id="s-kite-secret" type="password" placeholder="Your Kite API Secret" class="w-full mb-3 text-sm" />
+      <p class="text-xs text-slate-500">Get from <span class="text-indigo-400">developers.kite.trade</span></p>
+    </div>
+
+    <div class="card p-5 mb-4">
+      <h2 class="text-sm font-semibold text-slate-300 mb-3">Analysis Preferences</h2>
+      <label class="text-xs text-slate-400 block mb-1">Auto-Analysis Interval (hours)</label>
+      <input id="s-interval" type="number" value="2" min="1" max="24" class="w-32 mb-3 text-sm" />
+      <label class="text-xs text-slate-400 block mb-1">Price Alert Threshold (%)</label>
+      <input id="s-threshold" type="number" value="3" min="0.5" max="20" step="0.5" class="w-32 text-sm" />
+    </div>
+
+    <button onclick="saveSettings()" class="btn btn-primary text-sm w-full">Save Settings</button>
+  </div>
+</div>
+
+</main>
+
+<!-- ══════════════════════════════════════════════════════════ NOTIFICATION PANEL -->
+<div id="notif-panel" class="fixed right-0 top-14 h-[calc(100vh-56px)] w-80 glass border-l border-slate-700/50 z-50 hidden overflow-y-auto">
+  <div class="p-4 border-b border-slate-700/50 flex items-center justify-between">
+    <span class="text-sm font-semibold">Notifications</span>
+    <div class="flex gap-2">
+      <button onclick="markAllRead()" class="text-xs text-slate-400 hover:text-white">Mark all read</button>
+      <button onclick="closeNotifPanel()" class="text-slate-400 hover:text-white text-lg leading-none">&times;</button>
+    </div>
+  </div>
+  <div id="notif-list" class="p-3 space-y-2"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ ADD HOLDING MODAL -->
+<div id="add-modal" class="fixed inset-0 modal-backdrop z-50 hidden flex items-center justify-center">
+  <div class="card w-96 p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-semibold text-sm">Add Holding</h2>
+      <button onclick="closeAddModal()" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+    </div>
+    <div class="space-y-3">
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">NSE Symbol *</label>
+        <input id="m-symbol" type="text" placeholder="e.g. RELIANCE, TCS, INFY" class="w-full text-sm uppercase" />
+      </div>
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">Name (optional)</label>
+        <input id="m-name" type="text" placeholder="e.g. Reliance Industries" class="w-full text-sm" />
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">Quantity *</label>
+          <input id="m-qty" type="number" placeholder="10" min="0" step="any" class="w-full text-sm" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">Avg Buy Price (₹) *</label>
+          <input id="m-price" type="number" placeholder="1500.00" min="0" step="any" class="w-full text-sm" />
+        </div>
+      </div>
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">Platform</label>
+        <select id="m-platform" class="w-full text-sm">
+          <option value="groww">Groww</option>
+          <option value="kite">Zerodha Kite</option>
+          <option value="manual">Manual</option>
+        </select>
+      </div>
+      <button onclick="submitAddHolding()" class="btn btn-primary w-full text-sm mt-2">Add Holding</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
